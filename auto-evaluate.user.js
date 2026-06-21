@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.27
+// @version      2.0.0-beta.28
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -110,36 +110,10 @@
         logI('等待注意事项...');
         setStatus('等待注意事项...');
         return sleep(15000).then(function () {
-            // 先检查 dialog-frame（注意事项弹窗在这里）
-            try {
-                var dd = dialogDoc();
-                if (dd) {
-                    var btn = dd.querySelector('#btnClose') || dd.querySelector('input[type="button"][value*="阅读"]') || dd.querySelector('input[type="button"]');
-                    if (btn && !btn.disabled) {
-                        btn.click();
-                        logI('点击"我已阅读"（dialog-frame）');
-                        return;
-                    }
-                }
-            } catch (e) {}
-            // 再检查 frame1 内嵌 iframe
-            try {
-                var f1 = frame1Doc();
-                if (!f1) return;
-                var frames = f1.querySelectorAll('iframe, frame');
-                for (var i = 0; i < frames.length; i++) {
-                    try {
-                        var doc = frames[i].contentDocument;
-                        if (!doc) continue;
-                        var btn = doc.querySelector('#btnClose') || doc.querySelector('input[type="button"]');
-                        if (btn && !btn.disabled) {
-                            btn.click();
-                            logI('点击"我已阅读"（frame1）');
-                            return;
-                        }
-                    } catch (e) {}
-                }
-            } catch (e) {}
+            var btn = findBtnCloseDeep(document, 0);
+            if (btn && !btn.disabled) {
+                try { btn.click(); logI('点击"我已阅读"'); return; } catch (e) {}
+            }
             logI('无注意事项按钮，继续');
         });
     }
@@ -444,34 +418,55 @@
         return check();
     }
 
+    // ==================== 自动点击"我已阅读" ====================
+    var _noticeTimer = null;
+    var _lastNoticeBtn = null;
+
+    function findBtnCloseDeep(doc, depth) {
+        if (!doc || depth > 3) return null;
+        try {
+            var btn = doc.querySelector('#btnClose');
+            if (btn) return btn;
+        } catch (e) {}
+        try {
+            var frames = doc.querySelectorAll('iframe');
+            for (var i = 0; i < frames.length; i++) {
+                try {
+                    var inner = frames[i].contentDocument;
+                    if (!inner) continue;
+                    var found = findBtnCloseDeep(inner, depth + 1);
+                    if (found) return found;
+                } catch (e) {}
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    (function autoNoticePoll() {
+        setInterval(function () {
+            var btn = findBtnCloseDeep(document, 0);
+            if (!btn || btn.disabled) {
+                _lastNoticeBtn = null;
+                return;
+            }
+            if (btn === _lastNoticeBtn) return;
+            _lastNoticeBtn = btn;
+            if (_noticeTimer) clearTimeout(_noticeTimer);
+            logI('检测到"我已阅读"按钮，15秒后自动点击');
+            setStatus('等待15秒后点击...');
+            _noticeTimer = setTimeout(function () {
+                try {
+                    if (btn && !btn.disabled) { btn.click(); logI('已自动点击"我已阅读"'); setStatus('已就绪'); }
+                } catch (e) { logI('点击注意事项失败'); }
+                _noticeTimer = null;
+                _lastNoticeBtn = null;
+            }, 15000);
+        }, 2000);
+    })();
+
     // ==================== 启动 ====================
     createUI();
     updateBtns();
     updateModeUI();
-
-    // 启动时轮询等待评教页面，自动处理"我已阅读"
-    (function autoNotice() {
-        var start = Date.now();
-        function poll() {
-            if (Date.now() - start > 120000) { logI('自动注意事项检测超时'); return; }
-            var dd = null;
-            try { dd = dialogDoc(); } catch (e) {}
-            if (dd) {
-                var btn = dd.querySelector('#btnClose') || dd.querySelector('input[type="button"][value*="阅读"]') || dd.querySelector('input[type="button"]');
-                if (btn && !btn.disabled) {
-                    logI('检测到注意事项弹窗，等待15秒后自动点击');
-                    setStatus('等待注意事项...');
-                    sleep(15000).then(function () {
-                        try {
-                            var b2 = dd.querySelector('#btnClose') || dd.querySelector('input[type="button"][value*="阅读"]') || dd.querySelector('input[type="button"]');
-                            if (b2 && !b2.disabled) { b2.click(); logI('已自动点击"我已阅读"'); setStatus('已就绪'); }
-                        } catch (e) { logI('点击注意事项失败'); }
-                    });
-                    return;
-                }
-            }
-            return sleep(2000).then(poll);
-        }
-        poll();
-    })();
+})();
 })();
