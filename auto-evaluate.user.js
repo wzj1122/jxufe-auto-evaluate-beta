@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.17
+// @version      2.0.0-beta.18
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -759,9 +759,4 @@
     GM_registerMenuCommand('暂停/继续', togglePause);
     GM_registerMenuCommand('显示/隐藏日志', toggleLog);
     GM_registerMenuCommand('清除评教状态', clearEvalData);
-
-    if (GM_getValue('clear_pending', false)) {
-        log.i('检测到待清除暂存，自动继续...');
-        clearEvalDataContinue();
-    }
 })();
