@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.28
+// @version      2.0.0-beta.29
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -429,7 +429,7 @@
             if (btn) return btn;
         } catch (e) {}
         try {
-            var frames = doc.querySelectorAll('iframe');
+            var frames = doc.querySelectorAll('iframe, frame');
             for (var i = 0; i < frames.length; i++) {
                 try {
                     var inner = frames[i].contentDocument;
@@ -443,6 +443,7 @@
     }
 
     (function autoNoticePoll() {
+        logI('注意事项自动检测已启动');
         setInterval(function () {
             var btn = findBtnCloseDeep(document, 0);
             if (!btn || btn.disabled) {
@@ -468,5 +469,4 @@
     createUI();
     updateBtns();
     updateModeUI();
-})();
 })();
