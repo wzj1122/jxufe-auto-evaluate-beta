@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.15
+// @version      2.0.0-beta.16
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -522,12 +522,117 @@
         log.i('开始清除暂存数据...');
         setStatus('正在清除暂存数据...');
 
+        GM_setValue('pending_eval', false);
+
         var doc = reportDoc();
         if (!doc) {
             log.w('无法访问评教列表，请先导航到评教页面');
             setStatus('请先导航到评教页面');
             return;
         }
+
+        var allLinks = doc.querySelectorAll("a");
+        var deleteLinks = [];
+
+        for (var i = 0; i < allLinks.length; i++) {
+            var a = allLinks[i];
+            var onclick = a.getAttribute('onclick') || '';
+            var text = a.innerText.trim();
+            if (onclick.indexOf('deltwjxpj') >= 0 || text === '删除暂存') {
+                deleteLinks.push(a);
+            }
+        }
+
+        log.i('找到 ' + deleteLinks.length + ' 个删除暂存按钮');
+
+        if (deleteLinks.length === 0) {
+            log.w('未找到删除暂存按钮，可能没有暂存数据');
+            setStatus('未找到暂存数据');
+            return;
+        }
+
+        GM_setValue('clear_pending', true);
+        GM_setValue('clear_remaining', deleteLinks.length);
+
+        log.i('点击第一个删除按钮，页面将刷新...');
+        setStatus('删除中 (1/' + deleteLinks.length + ')');
+        window.confirm = function () { return true; };
+        deleteLinks[0].click();
+    }
+
+    function clearEvalDataContinue() {
+        var remaining = GM_getValue('clear_remaining', 0);
+        if (remaining <= 0) {
+            log.i('所有暂存数据已清除');
+            setStatus('清除完成');
+            GM_setValue('clear_pending', false);
+            return;
+        }
+
+        log.i('剩余 ' + remaining + ' 条，等待页面加载后继续...');
+        setStatus('剩余 ' + remaining + ' 条，导航中...');
+
+        function waitAndNavigate() {
+            var doc = reportDoc();
+            if (doc) {
+                log.i('已在评教页面，继续删除');
+                continueDelete();
+                return;
+            }
+
+            log.i('不在评教页面，等待导航...');
+            var dd = deskDoc();
+            if (dd) {
+                var s9 = dd.querySelector('#S9');
+                if (s9) {
+                    log.i('点击评教菜单 #S9');
+                    s9.click();
+                    sleep(5000).then(continueDelete);
+                    return;
+                }
+            }
+
+            document.querySelector('#header-apps').click();
+            sleep(3000).then(waitAndNavigate);
+        }
+
+        function continueDelete() {
+            var doc = reportDoc();
+            if (!doc) {
+                log.i('等待评教列表加载...');
+                sleep(2000).then(waitAndNavigate);
+                return;
+            }
+
+            var allLinks = doc.querySelectorAll("a");
+            var nextBtn = null;
+
+            for (var j = 0; j < allLinks.length; j++) {
+                var onclick = allLinks[j].getAttribute('onclick') || '';
+                if (onclick.indexOf('deltwjxpj') >= 0) {
+                    nextBtn = allLinks[j];
+                    break;
+                }
+            }
+
+            if (!nextBtn) {
+                log.i('未找到更多删除按钮，清除完成');
+                setStatus('清除完成');
+                GM_setValue('clear_pending', false);
+                return;
+            }
+
+            var newRemaining = remaining - 1;
+            GM_setValue('clear_remaining', newRemaining);
+
+            log.i('点击删除按钮 (剩余 ' + newRemaining + ' 条)');
+            setStatus('删除中 (剩余 ' + newRemaining + ' 条)');
+            window.confirm = function () { return true; };
+            nextBtn.click();
+        }
+
+        sleep(3000).then(waitAndNavigate);
+    }
 
         var allLinks = doc.querySelectorAll("a");
         var deleteLinks = [];
