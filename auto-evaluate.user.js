@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.25
+// @version      2.0.0-beta.26
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -101,7 +101,7 @@
     function updateBtns() {
         document.getElementById('ae-start').disabled = state.running;
         document.getElementById('ae-pause').disabled = !state.running;
-        document.getElementById('ae-stop').disabled = !state.running;
+        document.getElementById('ae-stop').disabled = !state.running && !state.clearing;
         document.getElementById('ae-pause').textContent = state.paused ? '继续' : '暂停';
         document.getElementById('ae-clear').disabled = state.running || state.clearing;
     }
@@ -110,6 +110,19 @@
         logI('等待注意事项...');
         setStatus('等待注意事项...');
         return sleep(15000).then(function () {
+            // 先检查 dialog-frame（注意事项弹窗在这里）
+            try {
+                var dd = dialogDoc();
+                if (dd) {
+                    var btn = dd.querySelector('#btnClose') || dd.querySelector('input[type="button"][value*="阅读"]') || dd.querySelector('input[type="button"]');
+                    if (btn && !btn.disabled) {
+                        btn.click();
+                        logI('点击"我已阅读"（dialog-frame）');
+                        return;
+                    }
+                }
+            } catch (e) {}
+            // 再检查 frame1 内嵌 iframe
             try {
                 var f1 = frame1Doc();
                 if (!f1) return;
@@ -121,7 +134,7 @@
                         var btn = doc.querySelector('#btnClose') || doc.querySelector('input[type="button"]');
                         if (btn && !btn.disabled) {
                             btn.click();
-                            logI('点击"我已阅读"');
+                            logI('点击"我已阅读"（frame1）');
                             return;
                         }
                     } catch (e) {}
@@ -297,8 +310,7 @@
             var onEval = !!reportDoc();
             if (!onEval) return navigateToEval();
             logI('已在评教页面');
-            if (!pending) return handleNotice();
-            return Promise.resolve();
+            return handleNotice().then(function () { return Promise.resolve(); });
         }
 
         function doLoop() {
@@ -369,9 +381,8 @@
     }
 
     function clearNext(current, total) {
-        if (!state.running || !state.clearing) {
+        if (!state.clearing) {
             logI('已停止清除');
-            state.clearing = false;
             updateBtns();
             return;
         }
