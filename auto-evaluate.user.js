@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.19
+// @version      2.0.0-beta.21
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -68,6 +68,8 @@
             + '<div class="r" style="margin-top:6px">'
             + '<button class="b bm" id="ae-fast">快速</button>'
             + '<button class="b bm" id="ae-compat">兼容</button>'
+            + '</div>'
+            + '<div class="r" style="margin-top:4px">'
             + '<button class="b bc" id="ae-clear">清除评教</button>'
             + '</div>';
         document.body.appendChild(p);
@@ -77,7 +79,12 @@
         document.getElementById('ae-stop').onclick = function () { stopEval(); };
         document.getElementById('ae-fast').onclick = function () { state.mode = 'fast'; updateModeUI(); };
         document.getElementById('ae-compat').onclick = function () { state.mode = 'compat'; updateModeUI(); };
-        document.getElementById('ae-clear').onclick = function () { if (!state.running && !state.clearing) startClear(); };
+        document.getElementById('ae-clear').onclick = function () {
+            if (state.running || state.clearing) return;
+            state.clearing = true;
+            updateBtns();
+            startClear();
+        };
 
         var drag = false, ox, oy;
         p.onmousedown = function (e) { if (e.target.tagName === 'BUTTON') return; drag = true; ox = e.offsetX; oy = e.offsetY; };
@@ -325,8 +332,6 @@
     }
 
     function startClear() {
-        state.clearing = true;
-        updateBtns();
         logI('开始清除评教状态');
         setStatus('清除评教中...');
 
@@ -358,11 +363,15 @@
         setStatus('删除中 (' + current + '/' + total + ')');
         logI('删除 (' + current + '/' + total + ')');
         window.confirm = function () { return true; };
+        window.alert = function () {};
+        window.prompt = function () { return ''; };
         btn.click();
         logI('已点击删除，等待页面刷新...');
 
-        // 等待页面刷新并加载完成
-        waitForPageReady().then(function () {
+        // 强制等待5秒让页面刷新
+        sleep(5000).then(function () {
+            return waitForPageReady();
+        }).then(function () {
             logI('页面已加载，继续下一个');
             clearNext(current + 1, total);
         });
