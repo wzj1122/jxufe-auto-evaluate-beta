@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.22
+// @version      2.0.0-beta.23
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -104,6 +104,31 @@
         document.getElementById('ae-stop').disabled = !state.running;
         document.getElementById('ae-pause').textContent = state.paused ? '继续' : '暂停';
         document.getElementById('ae-clear').disabled = state.running || state.clearing;
+    }
+
+    function handleNotice() {
+        logI('等待注意事项...');
+        setStatus('等待注意事项...');
+        return sleep(15000).then(function () {
+            try {
+                var f1 = frame1Doc();
+                if (!f1) return;
+                var frames = f1.querySelectorAll('iframe, frame');
+                for (var i = 0; i < frames.length; i++) {
+                    try {
+                        var doc = frames[i].contentDocument;
+                        if (!doc) continue;
+                        var btn = doc.querySelector('#btnClose') || doc.querySelector('input[type="button"]');
+                        if (btn && !btn.disabled) {
+                            btn.click();
+                            logI('点击"我已阅读"');
+                            return;
+                        }
+                    } catch (e) {}
+                }
+            } catch (e) {}
+            logI('无注意事项按钮，继续');
+        });
     }
 
     function closeDialog() {
@@ -272,6 +297,7 @@
             var onEval = !!reportDoc();
             if (!onEval) return navigateToEval();
             logI('已在评教页面');
+            if (!pending) return handleNotice();
             return Promise.resolve();
         }
 
