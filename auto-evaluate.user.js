@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.23
+// @version      2.0.0-beta.24
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -329,7 +329,7 @@
         checkLogin().then(afterLogin).then(doLoop);
     }
 
-    function finishEval() { state.running = false; state.paused = false; updateBtns(); setStatus('就绪'); }
+    function finishEval() { state.running = false; state.paused = false; GM_setValue('pending_eval', false); updateBtns(); setStatus('就绪'); }
     function togglePause() { state.paused = !state.paused; updateBtns(); setStatus(state.paused ? '已暂停' : '继续中...'); }
     function stopEval() { state.running = false; state.paused = false; GM_setValue('pending_eval', false); updateBtns(); setStatus('已停止'); logI('已停止'); }
 
@@ -431,9 +431,4 @@
     createUI();
     updateBtns();
     updateModeUI();
-
-    if (GM_getValue('pending_eval', false)) {
-        logI('检测到待处理评教，自动继续...');
-        startEval();
-    }
 })();
