@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.21
+// @version      2.0.0-beta.22
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -45,7 +45,7 @@
         var p = document.createElement('div');
         p.id = 'ae-panel';
         p.innerHTML = '<style>'
-            + '#ae-panel{position:fixed;bottom:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.3);font:14px/1.5 sans-serif;min-width:200px;cursor:move;user-select:none}'
+            + '#ae-panel{position:fixed;bottom:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.3);font:14px/1.5 sans-serif;min-width:200px;cursor:move;user-select:none;text-align:center}'
             + '#ae-panel .t{font-weight:bold;font-size:15px;margin-bottom:10px}'
             + '#ae-panel .s{font-size:12px;opacity:.85;margin-bottom:10px;min-height:18px}'
             + '#ae-panel .b{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;margin-right:6px;transition:.2s}'
@@ -56,7 +56,7 @@
             + '#ae-panel .bc{background:#9b59b6;color:#fff}'
             + '#ae-panel .bm{background:rgba(255,255,255,.2);color:#fff;font-size:11px;padding:4px 10px}'
             + '#ae-panel .bm.a{background:rgba(255,255,255,.4)}'
-            + '#ae-panel .r{display:flex;flex-wrap:wrap;gap:4px}'
+            +                 '#ae-panel .r{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}'
             + '</style>'
             + '<div class="t">自动评教</div>'
             + '<div class="s" id="ae-s">就绪</div>'
@@ -362,9 +362,6 @@
 
         setStatus('删除中 (' + current + '/' + total + ')');
         logI('删除 (' + current + '/' + total + ')');
-        window.confirm = function () { return true; };
-        window.alert = function () {};
-        window.prompt = function () { return ''; };
         btn.click();
         logI('已点击删除，等待页面刷新...');
 
