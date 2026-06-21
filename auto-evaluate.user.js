@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.12
+// @version      2.0.0-beta.13
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -616,35 +616,6 @@
         }
 
         sleep(3000).then(waitAndDelete);
-    }
-
-        var allLinks = doc.querySelectorAll("a");
-        var deleteLinks = [];
-
-        for (var i = 0; i < allLinks.length; i++) {
-            var a = allLinks[i];
-            var onclick = a.getAttribute('onclick') || '';
-            var text = a.innerText.trim();
-            if (onclick.indexOf('deltwjxpj') >= 0 || text === '删除暂存') {
-                deleteLinks.push(a);
-            }
-        }
-
-        log.i('找到 ' + deleteLinks.length + ' 个删除暂存按钮');
-
-        if (deleteLinks.length === 0) {
-            log.w('未找到删除暂存按钮，可能没有暂存数据');
-            setStatus('未找到暂存数据');
-            return;
-        }
-
-        GM_setValue('clear_pending', true);
-        GM_setValue('clear_remaining', deleteLinks.length);
-
-        log.i('点击第一个删除按钮，页面将刷新...');
-        setStatus('删除中 (1/' + deleteLinks.length + ')');
-        window.confirm = function () { return true; };
-        deleteLinks[0].click();
     }
 
     function clearEvalDataContinue() {
