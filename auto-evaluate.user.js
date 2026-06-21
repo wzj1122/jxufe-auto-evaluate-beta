@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.24
+// @version      2.0.0-beta.25
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -25,7 +25,7 @@
 
     function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-    var state = { running: false, paused: false, mode: 'fast', clearing: false };
+    var state = { running: false, paused: false, mode: GM_getValue('eval_mode', 'fast'), clearing: false };
 
     function deskDoc() { try { return document.getElementById('frmDesk') ? document.getElementById('frmDesk').contentDocument : null; } catch (e) { return null; } }
     function frame1Doc() { try { var d = deskDoc(); return d ? d.getElementById('frame_1').contentDocument : null; } catch (e) { return null; } }
@@ -77,8 +77,8 @@
         document.getElementById('ae-start').onclick = function () { if (!state.running) startEval(); };
         document.getElementById('ae-pause').onclick = function () { togglePause(); };
         document.getElementById('ae-stop').onclick = function () { stopEval(); };
-        document.getElementById('ae-fast').onclick = function () { state.mode = 'fast'; updateModeUI(); };
-        document.getElementById('ae-compat').onclick = function () { state.mode = 'compat'; updateModeUI(); };
+        document.getElementById('ae-fast').onclick = function () { state.mode = 'fast'; GM_setValue('eval_mode', 'fast'); updateModeUI(); };
+        document.getElementById('ae-compat').onclick = function () { state.mode = 'compat'; GM_setValue('eval_mode', 'compat'); updateModeUI(); };
         document.getElementById('ae-clear').onclick = function () {
             if (state.running || state.clearing) return;
             state.clearing = true;
@@ -331,7 +331,7 @@
 
     function finishEval() { state.running = false; state.paused = false; GM_setValue('pending_eval', false); updateBtns(); setStatus('就绪'); }
     function togglePause() { state.paused = !state.paused; updateBtns(); setStatus(state.paused ? '已暂停' : '继续中...'); }
-    function stopEval() { state.running = false; state.paused = false; GM_setValue('pending_eval', false); updateBtns(); setStatus('已停止'); logI('已停止'); }
+    function stopEval() { state.running = false; state.paused = false; state.clearing = false; GM_setValue('pending_eval', false); updateBtns(); setStatus('已停止'); logI('已停止'); }
 
     // ==================== 清除评教 ====================
     function getFirstDeleteBtn() {
@@ -369,6 +369,12 @@
     }
 
     function clearNext(current, total) {
+        if (!state.running || !state.clearing) {
+            logI('已停止清除');
+            state.clearing = false;
+            updateBtns();
+            return;
+        }
         if (current > total) {
             logI('所有暂存数据已清除');
             setStatus('清除完成');
@@ -431,4 +437,10 @@
     createUI();
     updateBtns();
     updateModeUI();
+
+    // 启动时自动处理"我已阅读"
+    if (!!reportDoc()) {
+        logI('检测到评教页面，自动处理注意事项');
+        handleNotice();
+    }
 })();
