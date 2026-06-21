@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.33
+// @version      2.0.0-beta.34
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -24,6 +24,18 @@
     function logW() { var a = Array.prototype.slice.call(arguments); a.unshift(LOG); console.warn.apply(console, a); }
 
     function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function wait(ms) {
+        var remain = ms;
+        function tick() {
+            if (!state.running && !state.clearing) return Promise.resolve();
+            if (state.paused) { setStatus('已暂停'); return sleep(500).then(tick); }
+            if (remain <= 0) return Promise.resolve();
+            var step = Math.min(remain, 500);
+            remain -= step;
+            return sleep(step).then(tick);
+        }
+        return tick();
+    }
 
     var state = { running: false, paused: false, mode: GM_getValue('eval_mode', 'fast'), clearing: false };
 
@@ -99,9 +111,10 @@
 
     function setStatus(m) { var el = document.getElementById('ae-s'); if (el) el.textContent = m; }
     function updateBtns() {
+        var active = state.running || state.clearing;
         document.getElementById('ae-start').disabled = state.running;
-        document.getElementById('ae-pause').disabled = !state.running;
-        document.getElementById('ae-stop').disabled = !state.running && !state.clearing;
+        document.getElementById('ae-pause').disabled = !active;
+        document.getElementById('ae-stop').disabled = !active;
         document.getElementById('ae-pause').textContent = state.paused ? '继续' : '暂停';
         document.getElementById('ae-clear').disabled = state.running || state.clearing;
     }
@@ -109,7 +122,7 @@
     function handleNotice() {
         logI('等待注意事项...');
         setStatus('等待注意事项...');
-        return sleep(15000).then(function () {
+        return wait(15000).then(function () {
             var btn = findBtnCloseDeep(document, 0);
             if (btn && !btn.disabled) {
                 try { btn.click(); logI('点击"我已阅读"'); return; } catch (e) {}
@@ -176,10 +189,10 @@
     function navigateToEval() {
         logI('导航到评教页面...');
         setStatus('导航中...');
-        return sleep(1000).then(function () { document.querySelector('#header-apps').click(); return sleep(2000); }).then(function () {
-            function tryS9(i) { if (i >= 10) return Promise.resolve(); var d = deskDoc(); if (d) { var s = d.querySelector('#S9'); if (s) { s.click(); logI('点击评教菜单'); return Promise.resolve(); } } return sleep(1000).then(function () { return tryS9(i + 1); }); }
+        return wait(1000).then(function () { document.querySelector('#header-apps').click(); return wait(2000); }).then(function () {
+            function tryS9(i) { if (i >= 10) return Promise.resolve(); var d = deskDoc(); if (d) { var s = d.querySelector('#S9'); if (s) { s.click(); logI('点击评教菜单'); return Promise.resolve(); } } return wait(1000).then(function () { return tryS9(i + 1); }); }
             return tryS9(0);
-        }).then(function () { return sleep(5000); }).then(function () {
+        }).then(function () { return wait(5000); }).then(function () {
             function waitR(i) { if (i >= 10) return Promise.resolve(); if (reportDoc()) return Promise.resolve(); return sleep(1000).then(function () { return waitR(i + 1); }); }
             return waitR(0);
         });
@@ -192,7 +205,7 @@
         logI('[' + total + ' 剩余] ' + item.teacher + ' - ' + item.course);
         setStatus('[' + total + ' 剩余] ' + item.course);
         item.btn.click();
-        return sleep(2000).then(function () { return waitForForm(); }).then(function (doc) {
+        return wait(2000).then(function () { return waitForForm(); }).then(function (doc) {
             if (!doc) { logW('表单加载超时'); return 'retry'; }
             fillForm(doc);
             return saveAndWait(doc);
@@ -200,7 +213,7 @@
             if (ok === false) { logW('保存失败'); return 'retry'; }
             logI('完成: ' + item.teacher);
             closeDialog();
-            return sleep(2000).then(function () { return true; });
+            return wait(2000).then(function () { return true; });
         });
     }
 
@@ -211,7 +224,7 @@
         logI('[' + total + ' 剩余] ' + item.teacher + ' - ' + item.course);
         setStatus('[' + total + ' 剩余] ' + item.course);
         item.btn.click();
-        return sleep(2000).then(function () { return waitForForm(); }).then(function (doc) {
+        return wait(2000).then(function () { return waitForForm(); }).then(function (doc) {
             if (!doc) { logW('表单加载超时'); return 'retry'; }
             fillForm(doc);
             return saveAndWait(doc);
@@ -223,7 +236,7 @@
                 setStatus('完成，剩余 ' + remaining + ' 项，刷新中...');
                 GM_setValue('pending_eval', true);
                 GM_setValue('pending_eval_time', Date.now());
-                return sleep(3000).then(function () { window.location.reload(); return 'reloaded'; });
+                return wait(3000).then(function () { window.location.reload(); return 'reloaded'; });
             }
             return true;
         });
@@ -273,11 +286,11 @@
         setStatus('启动中...');
 
         function checkLogin() {
-            if (location.href.indexOf('login.action') >= 0) {
+                if (location.href.indexOf('login.action') >= 0) {
                 logW('检测到登录页面，等待重新登录...');
                 setStatus('会话过期，请重新登录');
                 GM_setValue('pending_eval', false);
-                return sleep(1000).then(function () { if (!state.running) { finishEval(); return; } if (location.href.indexOf('login.action') < 0) return sleep(3000); return checkLogin(); });
+                return wait(1000).then(function () { if (!state.running) { finishEval(); return; } if (location.href.indexOf('login.action') < 0) return wait(3000); return checkLogin(); });
             }
             return Promise.resolve();
         }
@@ -291,24 +304,24 @@
 
         function doLoop() {
             if (!state.running) return finishEval();
-            if (state.paused) { setStatus('已暂停'); return sleep(1000).then(doLoop); }
+            if (state.paused) { setStatus('已暂停'); return wait(1000).then(doLoop); }
             var useFast = state.mode === 'fast';
             logI('使用 ' + (useFast ? '快速' : '兼容') + ' 模式');
             var failCount = 0;
             function loop() {
                 if (!state.running) return finishEval();
-                if (state.paused) { setStatus('已暂停'); return sleep(1000).then(loop); }
+                if (state.paused) { setStatus('已暂停'); return wait(1000).then(loop); }
                 return (useFast ? processOneFast() : processOneCompat()).then(function (result) {
                     if (result === false) { logI('所有评教已完成'); setStatus('全部完成'); return finishEval(); }
                     if (result === 'reloaded') return;
                     if (result === 'retry') {
                         failCount++;
-                        if (useFast && failCount >= 3) { logW('快速模式失败，切换兼容模式'); state.mode = 'compat'; updateModeUI(); failCount = 0; return sleep(2000).then(loop); }
+                        if (useFast && failCount >= 3) { logW('快速模式失败，切换兼容模式'); state.mode = 'compat'; updateModeUI(); failCount = 0; return wait(2000).then(loop); }
                         if (!useFast) { GM_setValue('pending_eval', true); GM_setValue('pending_eval_time', Date.now()); return sleep(2000).then(function () { window.location.reload(); }); }
-                        return sleep(3000).then(loop);
+                        return wait(3000).then(loop);
                     }
                     failCount = 0;
-                    return sleep(useFast ? 1500 : 2000).then(loop);
+                    return wait(useFast ? 1500 : 2000).then(loop);
                 });
             }
             return loop();
@@ -318,7 +331,11 @@
     }
 
     function finishEval() { state.running = false; state.paused = false; GM_setValue('pending_eval', false); GM_setValue('pending_eval_time', 0); updateBtns(); setStatus('就绪'); }
-    function togglePause() { state.paused = !state.paused; updateBtns(); setStatus(state.paused ? '已暂停' : '继续中...'); }
+    function togglePause() {
+        state.paused = !state.paused;
+        updateBtns();
+        setStatus(state.paused ? '已暂停' : (state.clearing ? '清除评教中...' : '继续中...'));
+    }
     function stopEval() { state.running = false; state.paused = false; state.clearing = false; GM_setValue('pending_eval', false); GM_setValue('pending_eval_time', 0); updateBtns(); setStatus('已停止'); logI('已停止'); }
 
     // ==================== 清除评教 ====================
@@ -362,6 +379,7 @@
             updateBtns();
             return;
         }
+        if (state.paused) { setStatus('已暂停'); return wait(1000).then(function () { clearNext(current, total); }); }
         if (current > total) {
             logI('所有暂存数据已清除');
             setStatus('清除完成');
@@ -384,8 +402,8 @@
         btn.click();
         logI('已点击删除，等待页面刷新...');
 
-        // 强制等待5秒让页面刷新
-        sleep(5000).then(function () {
+        // 等待5秒让页面刷新
+        wait(5000).then(function () {
             return waitForPageReady();
         }).then(function () {
             logI('页面已加载，继续下一个');
@@ -415,7 +433,7 @@
                     s9.click();
                 }
             }
-            return sleep(2000).then(check);
+            return wait(2000).then(check);
         }
         return check();
     }
