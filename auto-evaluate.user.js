@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.29
+// @version      2.0.0-beta.30
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -421,6 +421,7 @@
     // ==================== 自动点击"我已阅读" ====================
     var _noticeTimer = null;
     var _lastNoticeBtn = null;
+    var _noticeInterval = null;
 
     function findBtnCloseDeep(doc, depth) {
         if (!doc || depth > 3) return null;
@@ -444,7 +445,7 @@
 
     (function autoNoticePoll() {
         logI('注意事项自动检测已启动');
-        setInterval(function () {
+        _noticeInterval = setInterval(function () {
             var btn = findBtnCloseDeep(document, 0);
             if (!btn || btn.disabled) {
                 _lastNoticeBtn = null;
@@ -453,15 +454,20 @@
             if (btn === _lastNoticeBtn) return;
             _lastNoticeBtn = btn;
             if (_noticeTimer) clearTimeout(_noticeTimer);
-            logI('检测到"我已阅读"按钮，15秒后自动点击');
-            setStatus('等待15秒后点击...');
+            logI('检测到"我已阅读"按钮，1秒后自动点击');
+            setStatus('等待1秒后点击...');
             _noticeTimer = setTimeout(function () {
                 try {
-                    if (btn && !btn.disabled) { btn.click(); logI('已自动点击"我已阅读"'); setStatus('已就绪'); }
+                    if (btn && !btn.disabled) {
+                        btn.click();
+                        logI('已自动点击"我已阅读"');
+                        setStatus('已就绪');
+                    }
                 } catch (e) { logI('点击注意事项失败'); }
                 _noticeTimer = null;
                 _lastNoticeBtn = null;
-            }, 15000);
+                if (_noticeInterval) { clearInterval(_noticeInterval); _noticeInterval = null; }
+            }, 1000);
         }, 2000);
     })();
 
