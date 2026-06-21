@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.34
+// @version      2.0.0-beta.35
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -381,6 +381,12 @@
         }
         if (state.paused) { setStatus('已暂停'); return wait(1000).then(function () { clearNext(current, total); }); }
         if (current > total) {
+            var remain = getDeleteCount();
+            if (remain > 0) {
+                logI('仍剩 ' + remain + ' 个未清除，继续...');
+                clearNext(1, remain);
+                return;
+            }
             logI('所有暂存数据已清除');
             setStatus('清除完成');
             state.clearing = false;
@@ -390,6 +396,12 @@
 
         var btn = getFirstDeleteBtn();
         if (!btn) {
+            var remain = getDeleteCount();
+            if (remain > 0) {
+                logI('删除按钮未找到但仍有 ' + remain + ' 个，等待刷新后重试...');
+                wait(3000).then(function () { clearNext(current, remain); });
+                return;
+            }
             logI('未找到更多删除按钮，清除完成');
             setStatus('清除完成');
             state.clearing = false;
