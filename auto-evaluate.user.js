@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.31
+// @version      2.0.0-beta.33
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -222,6 +222,7 @@
             if (remaining > 0) {
                 setStatus('完成，剩余 ' + remaining + ' 项，刷新中...');
                 GM_setValue('pending_eval', true);
+                GM_setValue('pending_eval_time', Date.now());
                 return sleep(3000).then(function () { window.location.reload(); return 'reloaded'; });
             }
             return true;
@@ -275,6 +276,7 @@
             if (location.href.indexOf('login.action') >= 0) {
                 logW('检测到登录页面，等待重新登录...');
                 setStatus('会话过期，请重新登录');
+                GM_setValue('pending_eval', false);
                 return sleep(1000).then(function () { if (!state.running) { finishEval(); return; } if (location.href.indexOf('login.action') < 0) return sleep(3000); return checkLogin(); });
             }
             return Promise.resolve();
@@ -302,7 +304,7 @@
                     if (result === 'retry') {
                         failCount++;
                         if (useFast && failCount >= 3) { logW('快速模式失败，切换兼容模式'); state.mode = 'compat'; updateModeUI(); failCount = 0; return sleep(2000).then(loop); }
-                        if (!useFast) { GM_setValue('pending_eval', true); return sleep(2000).then(function () { window.location.reload(); }); }
+                        if (!useFast) { GM_setValue('pending_eval', true); GM_setValue('pending_eval_time', Date.now()); return sleep(2000).then(function () { window.location.reload(); }); }
                         return sleep(3000).then(loop);
                     }
                     failCount = 0;
@@ -315,9 +317,9 @@
         checkLogin().then(afterLogin).then(doLoop);
     }
 
-    function finishEval() { state.running = false; state.paused = false; GM_setValue('pending_eval', false); updateBtns(); setStatus('就绪'); }
+    function finishEval() { state.running = false; state.paused = false; GM_setValue('pending_eval', false); GM_setValue('pending_eval_time', 0); updateBtns(); setStatus('就绪'); }
     function togglePause() { state.paused = !state.paused; updateBtns(); setStatus(state.paused ? '已暂停' : '继续中...'); }
-    function stopEval() { state.running = false; state.paused = false; state.clearing = false; GM_setValue('pending_eval', false); updateBtns(); setStatus('已停止'); logI('已停止'); }
+    function stopEval() { state.running = false; state.paused = false; state.clearing = false; GM_setValue('pending_eval', false); GM_setValue('pending_eval_time', 0); updateBtns(); setStatus('已停止'); logI('已停止'); }
 
     // ==================== 清除评教 ====================
     function getFirstDeleteBtn() {
@@ -476,8 +478,13 @@
     updateBtns();
     updateModeUI();
 
-    if (GM_getValue('pending_eval', false)) {
+    // pending_eval 超过60秒则忽略（兼容模式刷新通常在10秒内完成）
+    var pendingTime = GM_getValue('pending_eval_time', 0);
+    if (GM_getValue('pending_eval', false) && location.href.indexOf('login.action') < 0 && (Date.now() - pendingTime < 60000)) {
         logI('检测到待处理评教，自动继续...');
         startEval();
+    } else if (GM_getValue('pending_eval', false)) {
+        GM_setValue('pending_eval', false);
+        GM_setValue('pending_eval_time', 0);
     }
 })();
