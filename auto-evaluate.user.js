@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.26
+// @version      2.0.0-beta.27
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -449,9 +449,29 @@
     updateBtns();
     updateModeUI();
 
-    // 启动时自动处理"我已阅读"
-    if (!!reportDoc()) {
-        logI('检测到评教页面，自动处理注意事项');
-        handleNotice();
-    }
+    // 启动时轮询等待评教页面，自动处理"我已阅读"
+    (function autoNotice() {
+        var start = Date.now();
+        function poll() {
+            if (Date.now() - start > 120000) { logI('自动注意事项检测超时'); return; }
+            var dd = null;
+            try { dd = dialogDoc(); } catch (e) {}
+            if (dd) {
+                var btn = dd.querySelector('#btnClose') || dd.querySelector('input[type="button"][value*="阅读"]') || dd.querySelector('input[type="button"]');
+                if (btn && !btn.disabled) {
+                    logI('检测到注意事项弹窗，等待15秒后自动点击');
+                    setStatus('等待注意事项...');
+                    sleep(15000).then(function () {
+                        try {
+                            var b2 = dd.querySelector('#btnClose') || dd.querySelector('input[type="button"][value*="阅读"]') || dd.querySelector('input[type="button"]');
+                            if (b2 && !b2.disabled) { b2.click(); logI('已自动点击"我已阅读"'); setStatus('已就绪'); }
+                        } catch (e) { logI('点击注意事项失败'); }
+                    });
+                    return;
+                }
+            }
+            return sleep(2000).then(poll);
+        }
+        poll();
+    })();
 })();
