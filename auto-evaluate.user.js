@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.30
+// @version      2.0.0-beta.31
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -475,4 +475,9 @@
     createUI();
     updateBtns();
     updateModeUI();
+
+    if (GM_getValue('pending_eval', false)) {
+        logI('检测到待处理评教，自动继续...');
+        startEval();
+    }
 })();
