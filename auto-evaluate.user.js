@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         江西财经大学自动评教
 // @namespace    https://github.com/wzj1122/jxufe-auto-evaluate
-// @version      2.0.0-beta.35
+// @version      2.0.0-beta.36
 // @description  江西财经大学 KINGOSOFT 教务系统自动评教脚本
 // @author       MiMo
 // @match        https://jwxt.jxufe.edu.cn/frame/homes.action*
@@ -9,8 +9,6 @@
 // @license      MIT
 // @homepage     https://github.com/wzj1122/jxufe-auto-evaluate
 // @supportURL   https://github.com/wzj1122/jxufe-auto-evaluate/issues
-// @updateURL    https://greasyfork.org/scripts/583720-%E6%B1%9F%E8%A5%BF%E8%B4%A2%E7%BB%8F%E5%A4%A7%E5%AD%A6%E8%87%AA%E5%8A%A8%E8%AF%84%E6%95%99.meta.js
-// @downloadURL  https://greasyfork.org/scripts/583720-%E6%B1%9F%E8%A5%BF%E8%B4%A2%E7%BB%8F%E5%A4%A7%E5%AD%A6%E8%87%AA%E5%8A%A8%E8%AF%84%E6%95%99.user.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @run-at       document-idle
@@ -37,7 +35,7 @@
         return tick();
     }
 
-    var state = { running: false, paused: false, mode: GM_getValue('eval_mode', 'fast'), clearing: false };
+    var state = { running: false, paused: false, mode: GM_getValue('eval_mode', 'fast'), clearing: false, completed: 0, total: 0, startTime: 0 };
 
     function deskDoc() { try { return document.getElementById('frmDesk') ? document.getElementById('frmDesk').contentDocument : null; } catch (e) { return null; } }
     function frame1Doc() { try { var d = deskDoc(); return d ? d.getElementById('frame_1').contentDocument : null; } catch (e) { return null; } }
@@ -68,7 +66,10 @@
             + '#ae-panel .bc{background:#9b59b6;color:#fff}'
             + '#ae-panel .bm{background:rgba(255,255,255,.2);color:#fff;font-size:11px;padding:4px 10px}'
             + '#ae-panel .bm.a{background:rgba(255,255,255,.4)}'
-            +                 '#ae-panel .r{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}'
+            + '#ae-panel .r{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}'
+            + '#ae-panel .pr{font-size:11px;opacity:.7;margin-top:4px;min-height:16px}'
+            + '#ae-panel .ci{width:100%;padding:4px 6px;border:1px solid rgba(255,255,255,.3);border-radius:4px;background:rgba(255,255,255,.15);color:#fff;font-size:12px;margin-top:4px;box-sizing:border-box}'
+            + '#ae-panel .ci::placeholder{color:rgba(255,255,255,.5)}'
             + '</style>'
             + '<div class="t">自动评教</div>'
             + '<div class="s" id="ae-s">就绪</div>'
@@ -83,7 +84,10 @@
             + '</div>'
             + '<div class="r" style="margin-top:4px">'
             + '<button class="b bc" id="ae-clear">清除评教</button>'
-            + '</div>';
+            + '</div>'
+            + '<div class="pr" id="ae-progress"></div>'
+            + '<input class="ci" id="ae-comment" placeholder="评语内容（默认：很好）" value="' + GM_getValue('eval_comment', '很好') + '">'
+            + '<input class="ci" id="ae-filter" placeholder="跳过课程（逗号分隔）" value="' + GM_getValue('eval_filter', '') + '">';
         document.body.appendChild(p);
 
         document.getElementById('ae-start').onclick = function () { if (!state.running) startEval(); };
@@ -98,8 +102,11 @@
             startClear();
         };
 
+        document.getElementById('ae-comment').onchange = function () { GM_setValue('eval_comment', this.value || '很好'); };
+        document.getElementById('ae-filter').onchange = function () { GM_setValue('eval_filter', this.value); };
+
         var drag = false, ox, oy;
-        p.onmousedown = function (e) { if (e.target.tagName === 'BUTTON') return; drag = true; ox = e.offsetX; oy = e.offsetY; };
+        p.onmousedown = function (e) { if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return; drag = true; ox = e.offsetX; oy = e.offsetY; };
         document.onmousemove = function (e) { if (!drag) return; p.style.left = (e.clientX - ox) + 'px'; p.style.top = (e.clientY - oy) + 'px'; p.style.right = 'auto'; p.style.bottom = 'auto'; };
         document.onmouseup = function () { drag = false; };
     }
@@ -110,6 +117,10 @@
     }
 
     function setStatus(m) { var el = document.getElementById('ae-s'); if (el) el.textContent = m; }
+    function updateProgress() {
+        var el = document.getElementById('ae-progress');
+        if (el && state.total > 0) el.textContent = '已完成 ' + state.completed + ' / ' + state.total;
+    }
     function updateBtns() {
         var active = state.running || state.clearing;
         document.getElementById('ae-start').disabled = state.running;
@@ -152,8 +163,9 @@
         logI('选择 ' + names.length + ' 题');
         var filled = 0;
         var tas = doc.querySelectorAll('textarea');
+        var commentText = document.getElementById('ae-comment').value || '很好';
         for (var k = 0; k < tas.length; k++) {
-            if (!tas[k].value.trim()) { tas[k].value = '很好'; tas[k].dispatchEvent(new Event('input', { bubbles: true })); tas[k].dispatchEvent(new Event('change', { bubbles: true })); filled++; }
+            if (!tas[k].value.trim()) { tas[k].value = commentText; tas[k].dispatchEvent(new Event('input', { bubbles: true })); tas[k].dispatchEvent(new Event('change', { bubbles: true })); filled++; }
         }
         logI('填写 ' + filled + ' 意见框');
     }
@@ -202,17 +214,23 @@
         var item = getFirstUnfinishedItem();
         if (!item) return Promise.resolve(false);
         var total = getUnfinishedCount();
+        state.total = total + state.completed;
         logI('[' + total + ' 剩余] ' + item.teacher + ' - ' + item.course);
         setStatus('[' + total + ' 剩余] ' + item.course);
+        updateProgress();
+        pauseNotice();
         item.btn.click();
         return wait(2000).then(function () { return waitForForm(); }).then(function (doc) {
             if (!doc) { logW('表单加载超时'); return 'retry'; }
             fillForm(doc);
             return saveAndWait(doc);
         }).then(function (ok) {
-            if (ok === false) { logW('保存失败'); return 'retry'; }
+            if (ok === false) { logW('保存失败'); resumeNotice(); return 'retry'; }
             logI('完成: ' + item.teacher);
+            state.completed++;
+            updateProgress();
             closeDialog();
+            resumeNotice();
             return wait(2000).then(function () { return true; });
         });
     }
@@ -221,23 +239,30 @@
         var item = getFirstUnfinishedItem();
         if (!item) return Promise.resolve(false);
         var total = getUnfinishedCount();
+        state.total = total + state.completed;
         logI('[' + total + ' 剩余] ' + item.teacher + ' - ' + item.course);
         setStatus('[' + total + ' 剩余] ' + item.course);
+        updateProgress();
+        pauseNotice();
         item.btn.click();
         return wait(2000).then(function () { return waitForForm(); }).then(function (doc) {
             if (!doc) { logW('表单加载超时'); return 'retry'; }
             fillForm(doc);
             return saveAndWait(doc);
         }).then(function (ok) {
-            if (ok === false) { logW('保存失败'); return 'retry'; }
+            if (ok === false) { logW('保存失败'); resumeNotice(); return 'retry'; }
             logI('完成: ' + item.teacher);
+            state.completed++;
+            updateProgress();
             var remaining = total - 1;
             if (remaining > 0) {
                 setStatus('完成，剩余 ' + remaining + ' 项，刷新中...');
                 GM_setValue('pending_eval', true);
                 GM_setValue('pending_eval_time', Date.now());
+                resumeNotice();
                 return wait(3000).then(function () { window.location.reload(); return 'reloaded'; });
             }
+            resumeNotice();
             return true;
         });
     }
@@ -245,11 +270,20 @@
     function getFirstUnfinishedItem() {
         var doc = reportDoc();
         if (!doc) return null;
+        var filterStr = document.getElementById('ae-filter').value || '';
+        var filters = filterStr ? filterStr.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
         var rows = doc.querySelectorAll("tr[id^='tr']");
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             var score = doc.querySelector('#' + row.id + '_pjdf');
             if (score && score.innerText && score.innerText.trim()) continue;
+            var courseEl = doc.querySelector('#' + row.id + '_kc');
+            var courseName = courseEl ? courseEl.innerText.trim() : '';
+            if (filters.length > 0) {
+                var skip = false;
+                for (var f = 0; f < filters.length; f++) { if (courseName.indexOf(filters[f]) >= 0) { skip = true; break; } }
+                if (skip) continue;
+            }
             var actions = doc.querySelector('#' + row.id + '_wjdc');
             if (!actions) continue;
             var links = actions.querySelectorAll('a');
@@ -266,11 +300,20 @@
         var doc = reportDoc();
         if (!doc) return 0;
         var count = 0;
+        var filterStr = document.getElementById('ae-filter') ? document.getElementById('ae-filter').value : '';
+        var filters = filterStr ? filterStr.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
         var rows = doc.querySelectorAll("tr[id^='tr']");
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             var score = doc.querySelector('#' + row.id + '_pjdf');
             if (score && score.innerText && score.innerText.trim()) continue;
+            var courseEl = doc.querySelector('#' + row.id + '_kc');
+            var courseName = courseEl ? courseEl.innerText.trim() : '';
+            if (filters.length > 0) {
+                var skip = false;
+                for (var f = 0; f < filters.length; f++) { if (courseName.indexOf(filters[f]) >= 0) { skip = true; break; } }
+                if (skip) continue;
+            }
             var actions = doc.querySelector('#' + row.id + '_wjdc');
             if (!actions) continue;
             var links = actions.querySelectorAll('a');
@@ -280,13 +323,13 @@
     }
 
     function startEval() {
-        state.running = true; state.paused = false;
+        state.running = true; state.paused = false; state.completed = 0; state.startTime = Date.now();
         updateBtns();
         logI('开始评教');
         setStatus('启动中...');
 
         function checkLogin() {
-                if (location.href.indexOf('login.action') >= 0) {
+            if (location.href.indexOf('login.action') >= 0) {
                 logW('检测到登录页面，等待重新登录...');
                 setStatus('会话过期，请重新登录');
                 GM_setValue('pending_eval', false);
@@ -330,7 +373,31 @@
         checkLogin().then(afterLogin).then(doLoop);
     }
 
-    function finishEval() { state.running = false; state.paused = false; GM_setValue('pending_eval', false); GM_setValue('pending_eval_time', 0); updateBtns(); setStatus('就绪'); }
+    function playCompleteSound() {
+        try {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 800;
+            osc.type = 'sine';
+            gain.gain.value = 0.3;
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            osc.stop(ctx.currentTime + 0.5);
+        } catch (e) {}
+    }
+
+    function finishEval() {
+        var elapsed = state.startTime > 0 ? Math.round((Date.now() - state.startTime) / 60000) : 0;
+        var msg = state.completed > 0 ? ('全部完成！共 ' + state.completed + ' 项，耗时 ' + elapsed + ' 分钟') : '就绪';
+        state.running = false; state.paused = false; GM_setValue('pending_eval', false); GM_setValue('pending_eval_time', 0);
+        updateBtns(); setStatus(msg);
+        if (state.completed > 0) playCompleteSound();
+        state.completed = 0; state.total = 0; state.startTime = 0;
+        var el = document.getElementById('ae-progress'); if (el) el.textContent = '';
+    }
     function togglePause() {
         state.paused = !state.paused;
         updateBtns();
@@ -454,6 +521,10 @@
     var _noticeTimer = null;
     var _lastNoticeBtn = null;
     var _noticeInterval = null;
+    var _noticePaused = false;
+
+    function pauseNotice() { _noticePaused = true; }
+    function resumeNotice() { _noticePaused = false; }
 
     function findBtnCloseDeep(doc, depth) {
         if (!doc || depth > 3) return null;
@@ -478,6 +549,7 @@
     (function autoNoticePoll() {
         logI('注意事项自动检测已启动');
         _noticeInterval = setInterval(function () {
+            if (_noticePaused) return;
             var btn = findBtnCloseDeep(document, 0);
             if (!btn || btn.disabled) {
                 _lastNoticeBtn = null;
